@@ -1,15 +1,476 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url = env("DATABASE_URL")
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [postgis]
 }
 
-model User {
-  id        String    @id @default(uuid())
-  email     String    @unique
-  name      String?
-  password  String?
+// ============================================
+// ENUMS
+// ============================================
+
+enum MerchantCategory {
+  restaurant
+  pharma
+  bakery
+
+  @@map("merchant_category")
+}
+
+enum PaymentType {
+  card
+  cash
+
+  @@map("payment_type")
+}
+
+enum DiscountType {
+  flat
+  percentage
+
+  @@map("discount_type")
+}
+
+enum OrderStatus {
+  pending
+  accepted
+  out_for_delivery
+  delivered
+  refunded
+  cancelled
+
+  @@map("order_status_type")
+}
+
+enum RoleType {
+  admin
+  merchant
+  employee
+  customer
+
+  @@map("role_type")
+}
+
+enum CityType {
+  Karachi
+  Lahore
+
+  @@map("city_type")
+}
+
+enum CartStatus {
+  active
+  ordered
+
+  @@map("cart_status_type")
+}
+
+// ============================================
+// CORE ENTITIES
+// ============================================
+
+model Merchant {
+  id            String           @id @default(uuid())
+  name          String           @db.VarChar(255)
+  ntn           String           @unique @db.VarChar(50)
+  slug          String           @unique @db.VarChar(255)
+  address       String           @db.Text
+  logo          String?          @db.Text
+  category      MerchantCategory
+  contactNumber String           @map("contact_number") @db.VarChar(20)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
+
+  branches            Branch[]
+  actors              Actor[]
+  roles               Role[]
+  sessions            Session[]
+  productCategories   ProductCategory[]
+  products            Product[]
+  discounts           MerchantDiscount[]
+  vatRules            VatRule[]
+  carts               Cart[]
+  orders              Order[]
+  merchantServiceZones MerchantServiceZone[]
+
+  @@map("merchants")
+}
+
+model Branch {
+  id                 String   @id @default(uuid())
+  merchantId         String   @map("merchant_id")
+  name               String   @db.VarChar(255)
+  address            String   @db.Text
+  contactNumber      String   @map("contact_number") @db.VarChar(20)
+  city               CityType
+  openingTimeMinutes Int      @map("opening_time_minutes") @db.SmallInt
+  closingTimeMinutes Int      @map("closing_time_minutes") @db.SmallInt
+  is24Hours          Boolean  @default(false) @map("is_24_hours")
+  days               String[] @default(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  merchant             Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  inventory            ProductInventory[]
+  carts                Cart[]
+  orders               Order[]
+  merchantServiceZones MerchantServiceZone[]
+
+  @@index([merchantId])
+  @@map("branches")
+}
+
+model Actor {
+  id           String    @id @default(uuid())
+  merchantId   String    @map("merchant_id")
+  email        String    @db.VarChar(255)
+  passwordHash String    @map("password_hash") @db.Text
+  firstName    String    @map("first_name") @db.VarChar(100)
+  lastName     String    @map("last_name") @db.VarChar(100)
+  isActive     Boolean   @default(true) @map("is_active")
+  lastLogin    DateTime? @map("last_login") @db.Timestamptz
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  modifiedAt   DateTime  @updatedAt @map("modified_at") @db.Timestamptz
+
+  merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  actorRoles ActorRole[]
+  sessions   Session[]
+  carts      Cart[]
+  orders     Order[]
+
+  @@unique([merchantId, email])
+  @@index([merchantId])
+  @@map("actors")
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  merchantId  String   @map("merchant_id")
+  roleType    RoleType @map("role_type")
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  actorRoles ActorRole[]
+
+  @@unique([merchantId, roleType])
+  @@index([merchantId])
+  @@map("roles")
+}
+
+model ActorRole {
+  merchantId String   @map("merchant_id")
+  actorId    String   @map("actor_id")
+  roleId     String   @map("role_id")
+  assignedAt DateTime @default(now()) @map("assigned_at") @db.Timestamptz
+
+  actor Actor @relation(fields: [actorId], references: [id], onDelete: Cascade)
+  role  Role  @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([merchantId, actorId])
+  @@index([actorId])
+  @@index([roleId])
+  @@map("actor_roles")
+}
+
+model Session {
+  id           String   @id @default(uuid())
+  merchantId   String   @map("merchant_id")
+  actorId      String   @map("actor_id")
+  refreshToken String   @unique @map("refresh_token") @db.Text
+  userAgent    String?  @map("user_agent") @db.VarChar(500)
+  clientIp     String?  @map("client_ip") @db.VarChar(50)
+  isBlocked    Boolean  @default(false) @map("is_blocked")
+  expiresAt    DateTime @map("expires_at") @db.Timestamptz
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  actor    Actor    @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([merchantId])
+  @@index([actorId])
+  @@map("sessions")
+}
+
+// ============================================
+// PRODUCT ENTITIES
+// ============================================
+
+model ProductCategory {
+  id          String   @id @default(uuid())
+  merchantId  String   @map("merchant_id")
+  name        String   @db.VarChar(255)
+  description String?  @db.Text
+  isAvailable Boolean  @default(true) @map("is_available")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant  Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  products  Product[]
+  discounts MerchantDiscount[]
+
+  @@unique([merchantId, name])
+  @@index([merchantId])
+  @@map("product_categories")
+}
+
+model Product {
+  id             String   @id @default(uuid())
+  merchantId     String   @map("merchant_id")
+  categoryId     String   @map("category_id")
+  name           String   @db.VarChar(255)
+  description    String?  @db.Text
+  basePrice      Decimal  @map("base_price") @db.Decimal(10, 2)
+  imageUrl       String?  @map("image_url") @db.Text
+  trackInventory Boolean  @default(false) @map("track_inventory")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  merchant  Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  category  ProductCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  addons    ProductAddon[]
+  inventory ProductInventory[]
+  discounts MerchantDiscount[]
+  cartItems CartItem[]
+  orderItems OrderItem[]
+
+  @@unique([merchantId, categoryId, name])
+  @@index([merchantId])
+  @@index([categoryId])
+  @@map("products")
+}
+
+model ProductAddon {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  name      String   @db.VarChar(255)
+  price     Decimal  @db.Decimal(10, 2)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  orderItemAddons OrderItemAddon[]
+
+  @@unique([productId, name])
+  @@index([productId])
+  @@map("product_addons")
+}
+
+model ProductInventory {
+  id        String   @id @default(uuid())
+  productId String   @map("product_id")
+  branchId  String   @map("branch_id")
+  quantity  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+  branch  Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, branchId])
+  @@index([productId])
+  @@index([branchId])
+  @@map("product_inventory")
+}
+
+model MerchantDiscount {
+  id          String       @id @default(uuid())
+  merchantId  String       @map("merchant_id")
+  productId   String?      @map("product_id")
+  categoryId  String?      @map("category_id")
+  type        DiscountType
+  value       Decimal      @db.Decimal(10, 2)
+  description String?      @db.Text
+  validFrom   DateTime?    @map("valid_from") @db.Timestamptz
+  validTo     DateTime?    @map("valid_to") @db.Timestamptz
+  createdAt   DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant  Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  product   Product?         @relation(fields: [productId], references: [id], onDelete: Cascade)
+  category  ProductCategory? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  cartItems CartItem[]
+
+  @@index([merchantId])
+  @@index([productId])
+  @@index([categoryId])
+  @@map("merchant_discounts")
+}
+
+model VatRule {
+  id          String      @id @default(uuid())
+  merchantId  String      @map("merchant_id")
+  paymentType PaymentType @map("payment_type")
+  rate        Decimal     @db.Decimal(5, 2)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, paymentType])
+  @@index([merchantId])
+  @@map("vat_rules")
+}
+
+// ============================================
+// ORDER ENTITIES
+// ============================================
+
+model Cart {
+  id         String     @id @default(uuid())
+  merchantId String     @map("merchant_id")
+  branchId   String     @map("branch_id")
+  actorId    String?    @map("actor_id")
+  status     CartStatus @default(active)
+  orderedAt  DateTime?  @map("ordered_at") @db.Timestamptz
+  createdAt  DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime   @updatedAt @map("updated_at") @db.Timestamptz
+
+  merchant Merchant   @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  branch   Branch     @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  actor    Actor?     @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  items    CartItem[]
+  order    Order?
+
+  @@index([merchantId])
+  @@index([branchId])
+  @@index([actorId])
+  @@map("carts")
+}
+
+model CartItem {
+  id                    String   @id @default(uuid())
+  cartId                String   @map("cart_id")
+  productId             String   @map("product_id")
+  quantity              Int
+  addonIds              String[] @map("addon_ids")
+  appliedDiscountId     String?  @map("applied_discount_id")
+  appliedDiscountAmount Decimal? @map("applied_discount_amount") @db.Decimal(10, 2)
+
+  cart     Cart              @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product  Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  discount MerchantDiscount? @relation(fields: [appliedDiscountId], references: [id], onDelete: SetNull)
+
+  @@index([cartId])
+  @@index([productId])
+  @@map("cart_items")
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  cartId          String      @unique @map("cart_id")
+  merchantId      String      @map("merchant_id")
+  branchId        String      @map("branch_id")
+  actorId         String?     @map("actor_id")
+  paymentType     PaymentType @map("payment_type")
+  vatRate         Decimal     @map("vat_rate") @db.Decimal(5, 2)
+  totalAmount     Decimal     @map("total_amount") @db.Decimal(10, 2)
+  status          OrderStatus @default(pending)
+  deliveryAddress String      @map("delivery_address") @db.Text
+  customerName    String      @map("customer_name") @db.VarChar(255)
+  customerPhone   String      @map("customer_phone") @db.VarChar(20)
+  createdAt       DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt       DateTime    @updatedAt @map("updated_at") @db.Timestamptz
+
+  cart     Cart        @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  merchant Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  branch   Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  actor    Actor?      @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  items    OrderItem[]
+
+  @@index([merchantId])
+  @@index([branchId])
+  @@index([actorId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("orders")
+}
+
+model OrderItem {
+  orderId        String  @map("order_id")
+  productId      String  @map("product_id")
+  quantity       Int
+  price          Decimal @db.Decimal(10, 2)
+  baseAmount     Decimal @map("base_amount") @db.Decimal(10, 2)
+  addonAmount    Decimal @map("addon_amount") @db.Decimal(10, 2)
+  discountAmount Decimal @map("discount_amount") @db.Decimal(10, 2)
+  taxAmount      Decimal @map("tax_amount") @db.Decimal(10, 2)
+  lineTotal      Decimal @map("line_total") @db.Decimal(10, 2)
+
+  order   Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  addons  OrderItemAddon[]
+
+  @@id([orderId, productId])
+  @@index([orderId])
+  @@index([productId])
+  @@map("order_items")
+}
+
+model OrderItemAddon {
+  orderId        String  @map("order_id")
+  productId      String  @map("product_id")
+  addonId        String  @map("addon_id")
+  addonName      String  @map("addon_name") @db.VarChar(255)
+  addonPrice     Decimal @map("addon_price") @db.Decimal(10, 2)
+  quantity       Int
+  lineAddonTotal Decimal @map("line_addon_total") @db.Decimal(10, 2)
+
+  orderItem OrderItem    @relation(fields: [orderId, productId], references: [orderId, productId], onDelete: Cascade)
+  addon     ProductAddon @relation(fields: [addonId], references: [id], onDelete: Cascade)
+
+  @@id([orderId, productId, addonId])
+  @@index([addonId])
+  @@map("order_item_addons")
+}
+
+// ============================================
+// GEO ENTITIES
+// ============================================
+
+model Area {
+  id        String   @id @default(uuid())
+  name      String   @db.VarChar(255)
+  city      CityType
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  zones Zone[]
+
+  @@unique([name, city])
+  @@map("areas")
+}
+
+model Zone {
+  id             String                            @id @default(uuid())
+  areaId         String                            @map("area_id")
+  name           String                            @db.VarChar(255)
+  coordinates    Unsupported("geometry(Polygon, 4326)")?
+  coordinatesWkt String?                           @map("coordinates_wkt") @db.Text
+  createdAt      DateTime                          @default(now()) @map("created_at") @db.Timestamptz
+
+  area                 Area                  @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  merchantServiceZones MerchantServiceZone[]
+
+  @@unique([areaId, name])
+  @@index([areaId])
+  @@map("zones")
+}
+
+model MerchantServiceZone {
+  id         String   @id @default(uuid())
+  merchantId String   @map("merchant_id")
+  zoneId     String   @map("zone_id")
+  branchId   String   @map("branch_id")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  zone     Zone     @relation(fields: [zoneId], references: [id], onDelete: Cascade)
+  branch   Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@unique([merchantId, zoneId])
+  @@index([merchantId])
+  @@index([zoneId])
+  @@index([branchId])
+  @@map("merchant_service_zones")
 }

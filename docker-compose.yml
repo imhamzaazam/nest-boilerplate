@@ -1,7 +1,7 @@
 version: '3.8'
 services:
-  nest-api:
-    container_name: nest-api
+  api:
+    container_name: go-delivery-api
     build:
       context: .
       dockerfile: Dockerfile
@@ -10,22 +10,26 @@ services:
     restart: always
     volumes:
       - .:/usr/src/app
+      - /usr/src/app/node_modules
     depends_on:
       - postgres
     env_file:
       - .env
+    command: npm run start:dev
 
   postgres:
-    image: postgres:13
-    container_name: postgresprisma
+    image: postgis/postgis:16-3.4
+    container_name: go-delivery-db
     restart: always
     ports:
       - 5432:5432
-    env_file:
-      - .env
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-prisma}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-topsecret}
+      POSTGRES_DB: ${POSTGRES_DB:-godelivery}
     volumes:
-      - postgres:/var/lib/postgresql/data
+      - postgres_data:/var/lib/postgresql/data
 
 volumes:
-  postgres:
-    name: nest-prisma-db
+  postgres_data:
+    name: go-delivery-db

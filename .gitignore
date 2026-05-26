@@ -35,3 +35,7 @@ dock
 !.vscode/tasks.json
 !.vscode/launch.json
 !.vscode/extensions.json
+
+# Generated docs
+/swagger.json
+/swagger.yaml

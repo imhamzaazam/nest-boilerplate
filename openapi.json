@@ -1,0 +1,889 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Go Delivery API",
+    "description": "Tenant-aware delivery and commerce API with multi-merchant support",
+    "version": "1.0.0",
+    "contact": {
+      "email": "support@godelivery.com"
+    }
+  },
+  "servers": [
+    { "url": "http://localhost:3000/api/v1", "description": "Development" },
+    { "url": "https://api.godelivery.com/api/v1", "description": "Production" }
+  ],
+  "tags": [
+    { "name": "Authentication", "description": "Login and token management" },
+    { "name": "Merchants", "description": "Merchant registration and management" },
+    { "name": "Actors", "description": "User/actor management" },
+    { "name": "Branches", "description": "Branch management" },
+    { "name": "Categories", "description": "Product category management" },
+    { "name": "Products", "description": "Product and addon management" },
+    { "name": "Discounts", "description": "Discount management" },
+    { "name": "Inventory", "description": "Inventory tracking" },
+    { "name": "Cart", "description": "Shopping cart operations" },
+    { "name": "Orders", "description": "Order management" },
+    { "name": "Geo", "description": "Areas and zones management" },
+    { "name": "Service Zones", "description": "Merchant delivery zones" },
+    { "name": "Reports", "description": "Sales and analytics" }
+  ],
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "code": { "type": "string" },
+          "errors": { "type": "string" }
+        }
+      },
+      "LoginDto": {
+        "type": "object",
+        "required": ["merchant_id", "email", "password"],
+        "properties": {
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        }
+      },
+      "LoginResponse": {
+        "type": "object",
+        "properties": {
+          "uid": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "access_token": { "type": "string" },
+          "access_token_expires_at": { "type": "string", "format": "date-time" },
+          "refresh_token": { "type": "string" },
+          "refresh_token_expires_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "RenewTokenDto": {
+        "type": "object",
+        "required": ["refresh_token"],
+        "properties": {
+          "refresh_token": { "type": "string" }
+        }
+      },
+      "RenewTokenResponse": {
+        "type": "object",
+        "properties": {
+          "access_token": { "type": "string" },
+          "access_token_expires_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateMerchantDto": {
+        "type": "object",
+        "required": ["name", "ntn", "address", "category", "contact_number"],
+        "properties": {
+          "name": { "type": "string" },
+          "ntn": { "type": "string" },
+          "address": { "type": "string" },
+          "category": { "type": "string", "enum": ["restaurant", "pharma", "bakery"] },
+          "contact_number": { "type": "string" }
+        }
+      },
+      "MerchantResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "ntn": { "type": "string" },
+          "address": { "type": "string" },
+          "logo": { "type": "string", "nullable": true },
+          "category": { "type": "string", "enum": ["restaurant", "pharma", "bakery"] },
+          "contact_number": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "BootstrapActorDto": {
+        "type": "object",
+        "required": ["email", "full_name", "password", "role"],
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "full_name": { "type": "string" },
+          "password": { "type": "string", "minLength": 8 },
+          "role": { "type": "string", "enum": ["admin", "merchant", "employee", "customer"] }
+        }
+      },
+      "ActorResponse": {
+        "type": "object",
+        "properties": {
+          "uid": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string" },
+          "full_name": { "type": "string" },
+          "is_active": { "type": "boolean" },
+          "last_login": { "type": "string", "format": "date-time", "nullable": true }
+        }
+      },
+      "CreateBranchDto": {
+        "type": "object",
+        "required": ["name", "address", "contact_number", "city", "opening_time", "closing_time"],
+        "properties": {
+          "name": { "type": "string" },
+          "address": { "type": "string" },
+          "contact_number": { "type": "string" },
+          "city": { "type": "string", "enum": ["lahore", "karachi", "islamabad", "rawalpindi", "faisalabad"] },
+          "is_24_hours": { "type": "boolean", "default": false },
+          "days": { "type": "array", "items": { "type": "string" } },
+          "opening_time": { "type": "string", "pattern": "^([01]?\\d|2[0-3]):[0-5]\\d$" },
+          "closing_time": { "type": "string", "pattern": "^([01]?\\d|2[0-3]):[0-5]\\d$" }
+        }
+      },
+      "BranchResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "address": { "type": "string" },
+          "contact_number": { "type": "string" },
+          "city": { "type": "string" },
+          "opening_time": { "type": "string" },
+          "closing_time": { "type": "string" },
+          "is_open": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateCategoryDto": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" }
+        }
+      },
+      "CategoryResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "is_available": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateProductDto": {
+        "type": "object",
+        "required": ["category_id", "name", "base_price"],
+        "properties": {
+          "category_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "base_price": { "type": "number", "minimum": 0 },
+          "image_url": { "type": "string" },
+          "track_inventory": { "type": "boolean", "default": false }
+        }
+      },
+      "ProductResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "category_id": { "type": "string", "format": "uuid" },
+          "category_name": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string", "nullable": true },
+          "base_price": { "type": "number" },
+          "image_url": { "type": "string", "nullable": true },
+          "track_inventory": { "type": "boolean" },
+          "is_active": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateAddonDto": {
+        "type": "object",
+        "required": ["name", "price"],
+        "properties": {
+          "name": { "type": "string" },
+          "price": { "type": "number", "minimum": 0 }
+        }
+      },
+      "AddonResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "product_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "price": { "type": "number" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateDiscountDto": {
+        "type": "object",
+        "required": ["type", "value"],
+        "properties": {
+          "type": { "type": "string", "enum": ["flat", "percentage"] },
+          "value": { "type": "number", "minimum": 0 },
+          "description": { "type": "string" },
+          "product_id": { "type": "string", "format": "uuid" },
+          "category_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "DiscountResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "product_id": { "type": "string", "format": "uuid", "nullable": true },
+          "category_id": { "type": "string", "format": "uuid", "nullable": true },
+          "type": { "type": "string", "enum": ["flat", "percentage"] },
+          "value": { "type": "number" },
+          "description": { "type": "string", "nullable": true },
+          "valid_from": { "type": "string", "format": "date-time", "nullable": true },
+          "valid_to": { "type": "string", "format": "date-time", "nullable": true },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateInventoryDto": {
+        "type": "object",
+        "required": ["product_id", "branch_id", "quantity"],
+        "properties": {
+          "product_id": { "type": "string", "format": "uuid" },
+          "branch_id": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer", "minimum": 0 }
+        }
+      },
+      "CreateCartDto": {
+        "type": "object",
+        "required": ["merchant_id", "branch_id"],
+        "properties": {
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "branch_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "CartCreatedResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "branch_id": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AddCartItemDto": {
+        "type": "object",
+        "required": ["product_id", "quantity"],
+        "properties": {
+          "product_id": { "type": "string", "format": "uuid" },
+          "quantity": { "type": "integer", "minimum": 1 },
+          "addon_ids": { "type": "array", "items": { "type": "string", "format": "uuid" } },
+          "discount_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "CartResponse": {
+        "type": "object",
+        "properties": {
+          "cart_id": { "type": "string", "format": "uuid" },
+          "status": { "type": "string", "enum": ["active", "ordered", "abandoned"] },
+          "payment_method": { "type": "string", "enum": ["cash", "card", "wallet"] },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": { "type": "string" },
+                "item_id": { "type": "string" },
+                "name": { "type": "string" },
+                "price": { "type": "number" },
+                "final_price": { "type": "number" },
+                "quantity": { "type": "integer" },
+                "total_price": { "type": "number" },
+                "vat": { "type": "number" },
+                "addons": { "type": "array", "items": { "type": "object" } }
+              }
+            }
+          },
+          "subtotal": { "type": "number" },
+          "total_vat": { "type": "number" },
+          "vat_rate": { "type": "number" },
+          "total_price": { "type": "number" }
+        }
+      },
+      "CreateOrderDto": {
+        "type": "object",
+        "required": ["cart_id", "payment_type", "delivery_address", "customer_name", "customer_phone"],
+        "properties": {
+          "cart_id": { "type": "string", "format": "uuid" },
+          "payment_type": { "type": "string", "enum": ["cash", "card", "wallet"] },
+          "delivery_address": { "type": "string" },
+          "customer_name": { "type": "string" },
+          "customer_phone": { "type": "string", "pattern": "^\\+?[0-9]{10,15}$" }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "cart_id": { "type": "string", "format": "uuid" },
+          "merchant_id": { "type": "string", "format": "uuid" },
+          "branch_id": { "type": "string", "format": "uuid" },
+          "payment_type": { "type": "string" },
+          "vat_rate": { "type": "number" },
+          "total_amount": { "type": "number" },
+          "status": { "type": "string", "enum": ["pending", "confirmed", "preparing", "ready", "dispatched", "delivered", "cancelled", "refunded"] },
+          "delivery_address": { "type": "string" },
+          "customer_name": { "type": "string" },
+          "customer_phone": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "CreateAreaDto": {
+        "type": "object",
+        "required": ["name", "city"],
+        "properties": {
+          "name": { "type": "string" },
+          "city": { "type": "string", "enum": ["lahore", "karachi", "islamabad", "rawalpindi", "faisalabad"] }
+        }
+      },
+      "CreateZoneDto": {
+        "type": "object",
+        "required": ["name", "coordinates_wkt"],
+        "properties": {
+          "name": { "type": "string" },
+          "coordinates_wkt": { "type": "string", "description": "WKT polygon format, e.g., POLYGON((lng lat, lng lat, ...))" }
+        }
+      },
+      "CreateServiceZoneDto": {
+        "type": "object",
+        "required": ["zone_id", "branch_id"],
+        "properties": {
+          "zone_id": { "type": "string", "format": "uuid" },
+          "branch_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "CheckCoverageDto": {
+        "type": "object",
+        "required": ["latitude", "longitude"],
+        "properties": {
+          "latitude": { "type": "number" },
+          "longitude": { "type": "number" }
+        }
+      },
+      "SalesReportResponse": {
+        "type": "object",
+        "properties": {
+          "month": { "type": "integer" },
+          "year": { "type": "integer" },
+          "total_sales": { "type": "number" },
+          "total_discount": { "type": "number" },
+          "total_tax": { "type": "number" },
+          "profit_estimate": { "type": "number" }
+        }
+      }
+    }
+  },
+  "paths": {
+    "/login": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Login",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LoginResponse" } } } },
+          "401": { "description": "Invalid credentials" }
+        }
+      }
+    },
+    "/renew-token": {
+      "post": {
+        "tags": ["Authentication"],
+        "summary": "Renew access token",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenewTokenDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/RenewTokenResponse" } } } },
+          "401": { "description": "Invalid or expired refresh token" }
+        }
+      }
+    },
+    "/merchants": {
+      "get": {
+        "tags": ["Merchants"],
+        "summary": "List all merchants (admin only)",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/MerchantResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Merchants"],
+        "summary": "Create a new merchant",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateMerchantDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MerchantResponse" } } } },
+          "409": { "description": "NTN already exists" }
+        }
+      }
+    },
+    "/merchants/{merchant_id}/bootstrap-actor": {
+      "post": {
+        "tags": ["Merchants"],
+        "summary": "Create first actor for a merchant",
+        "parameters": [{ "name": "merchant_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapActorDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorResponse" } } } }
+        }
+      }
+    },
+    "/merchant": {
+      "get": {
+        "tags": ["Merchants"],
+        "summary": "Get current merchant",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MerchantResponse" } } } }
+        }
+      },
+      "patch": {
+        "tags": ["Merchants"],
+        "summary": "Update current merchant",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateMerchantDto" } } }
+        },
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MerchantResponse" } } } }
+        }
+      }
+    },
+    "/actors/me": {
+      "get": {
+        "tags": ["Actors"],
+        "summary": "Get current actor profile",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorResponse" } } } }
+        }
+      }
+    },
+    "/actors/{uid}": {
+      "get": {
+        "tags": ["Actors"],
+        "summary": "Get actor by ID",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "uid", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorResponse" } } } }
+        }
+      }
+    },
+    "/actors": {
+      "post": {
+        "tags": ["Actors"],
+        "summary": "Create a new actor",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BootstrapActorDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ActorResponse" } } } }
+        }
+      }
+    },
+    "/merchant/actors": {
+      "get": {
+        "tags": ["Actors"],
+        "summary": "List all actors for merchant",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ActorResponse" } } } } }
+        }
+      }
+    },
+    "/merchant/branches": {
+      "get": {
+        "tags": ["Branches"],
+        "summary": "List all branches",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/BranchResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Branches"],
+        "summary": "Create a branch",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateBranchDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/BranchResponse" } } } }
+        }
+      }
+    },
+    "/merchant/branches/{branch_id}/availability": {
+      "get": {
+        "tags": ["Branches"],
+        "summary": "Check branch availability",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "branch_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      }
+    },
+    "/merchant/categories": {
+      "get": {
+        "tags": ["Categories"],
+        "summary": "List categories",
+        "parameters": [{ "name": "x-merchant-id", "in": "header", "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/CategoryResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Categories"],
+        "summary": "Create category",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCategoryDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CategoryResponse" } } } }
+        }
+      }
+    },
+    "/merchant/products": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "List products",
+        "parameters": [{ "name": "x-merchant-id", "in": "header", "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/ProductResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Products"],
+        "summary": "Create product",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateProductDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductResponse" } } } }
+        }
+      }
+    },
+    "/products/{product_id}": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "Get product details",
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ProductResponse" } } } }
+        }
+      }
+    },
+    "/products/{product_id}/addons": {
+      "get": {
+        "tags": ["Products"],
+        "summary": "List product addons",
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/AddonResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Products"],
+        "summary": "Add addon to product",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "product_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateAddonDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddonResponse" } } } }
+        }
+      }
+    },
+    "/merchant/discounts": {
+      "get": {
+        "tags": ["Discounts"],
+        "summary": "List discounts",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/DiscountResponse" } } } } }
+        }
+      },
+      "post": {
+        "tags": ["Discounts"],
+        "summary": "Create discount",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateDiscountDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/DiscountResponse" } } } }
+        }
+      }
+    },
+    "/merchant/inventory": {
+      "get": {
+        "tags": ["Inventory"],
+        "summary": "List inventory",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "tags": ["Inventory"],
+        "summary": "Create/update inventory",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateInventoryDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Success" }
+        }
+      }
+    },
+    "/carts": {
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Create a new cart",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateCartDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CartCreatedResponse" } } } }
+        }
+      }
+    },
+    "/carts/{cart_id}": {
+      "get": {
+        "tags": ["Cart"],
+        "summary": "Get cart with pricing",
+        "parameters": [
+          { "name": "cart_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "payment_method", "in": "query", "schema": { "type": "string", "enum": ["cash", "card", "wallet"] } }
+        ],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CartResponse" } } } }
+        }
+      }
+    },
+    "/carts/{cart_id}/items": {
+      "post": {
+        "tags": ["Cart"],
+        "summary": "Add item to cart",
+        "parameters": [{ "name": "cart_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AddCartItemDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Added" },
+          "400": { "description": "Cart is no longer active" }
+        }
+      }
+    },
+    "/carts/{cart_id}/items/{item_id}": {
+      "patch": {
+        "tags": ["Cart"],
+        "summary": "Update cart item quantity",
+        "parameters": [
+          { "name": "cart_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "quantity": { "type": "integer", "minimum": 1 } } } } }
+        },
+        "responses": {
+          "200": { "description": "Updated" },
+          "400": { "description": "Cart is no longer active" }
+        }
+      },
+      "delete": {
+        "tags": ["Cart"],
+        "summary": "Remove item from cart",
+        "parameters": [
+          { "name": "cart_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } },
+          { "name": "item_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }
+        ],
+        "responses": {
+          "204": { "description": "Removed" },
+          "400": { "description": "Cart is no longer active" }
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": ["Orders"],
+        "summary": "Place an order",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateOrderDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Order placed" },
+          "400": { "description": "Cart already ordered or empty" }
+        }
+      }
+    },
+    "/orders/{order_id}": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "Get order details",
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/OrderResponse" } } } }
+        }
+      },
+      "patch": {
+        "tags": ["Orders"],
+        "summary": "Update order status",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "order_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "type": "object", "properties": { "status": { "type": "string", "enum": ["pending", "confirmed", "preparing", "ready", "dispatched", "delivered", "cancelled", "refunded"] } } } } }
+        },
+        "responses": {
+          "200": { "description": "Updated" }
+        }
+      }
+    },
+    "/merchant/orders": {
+      "get": {
+        "tags": ["Orders"],
+        "summary": "List merchant orders",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/OrderResponse" } } } } }
+        }
+      }
+    },
+    "/areas": {
+      "get": {
+        "tags": ["Geo"],
+        "summary": "List areas",
+        "security": [{ "bearerAuth": [] }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "tags": ["Geo"],
+        "summary": "Create area (admin)",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateAreaDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    },
+    "/areas/{area_id}/zones": {
+      "get": {
+        "tags": ["Geo"],
+        "summary": "List zones in area",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "area_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "tags": ["Geo"],
+        "summary": "Create zone (admin)",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [{ "name": "area_id", "in": "path", "required": true, "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateZoneDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    },
+    "/merchant/service-zones": {
+      "get": {
+        "tags": ["Service Zones"],
+        "summary": "List merchant service zones",
+        "parameters": [{ "name": "x-merchant-id", "in": "header", "schema": { "type": "string", "format": "uuid" } }],
+        "responses": {
+          "200": { "description": "Success" }
+        }
+      },
+      "post": {
+        "tags": ["Service Zones"],
+        "summary": "Assign zone to branch",
+        "security": [{ "bearerAuth": [] }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CreateServiceZoneDto" } } }
+        },
+        "responses": {
+          "201": { "description": "Created" }
+        }
+      }
+    },
+    "/merchant/service-zones/check": {
+      "post": {
+        "tags": ["Service Zones"],
+        "summary": "Check delivery coverage",
+        "parameters": [{ "name": "x-merchant-id", "in": "header", "schema": { "type": "string", "format": "uuid" } }],
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/CheckCoverageDto" } } }
+        },
+        "responses": {
+          "200": { "description": "Coverage check result" }
+        }
+      }
+    },
+    "/merchant/reports/sales": {
+      "get": {
+        "tags": ["Reports"],
+        "summary": "Get monthly sales report",
+        "security": [{ "bearerAuth": [] }],
+        "parameters": [
+          { "name": "month", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 1, "maximum": 12 } },
+          { "name": "year", "in": "query", "required": true, "schema": { "type": "integer", "minimum": 2020 } }
+        ],
+        "responses": {
+          "200": { "description": "Success", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SalesReportResponse" } } } }
+        }
+      }
+    }
+  }
+}
