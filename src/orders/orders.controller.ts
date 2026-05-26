@@ -1,8 +1,21 @@
-import { Controller, Get, Post, Patch, Body, Param, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  ParseUUIDPipe,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { OrdersService } from './orders.service';
-import { CreateOrderDto, UpdateOrderStatusDto, OrderResponseDto, CreateOrderResponseDto } from './dto/order.dto';
+import {
+  CreateOrderDto,
+  UpdateOrderStatusDto,
+  OrderResponseDto,
+  CreateOrderResponseDto,
+} from './dto/order.dto';
 import { Public } from '@/auth/decorators/public.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
@@ -23,7 +36,9 @@ export class OrdersController {
   @Get(':order_id')
   @Public()
   @ApiOperation({ summary: 'Get order' })
-  findOne(@Param('order_id', ParseUUIDPipe) id: string): Promise<OrderResponseDto> {
+  findOne(
+    @Param('order_id', ParseUUIDPipe) id: string,
+  ): Promise<OrderResponseDto> {
     return this.service.findOne(id);
   }
 
@@ -31,7 +46,10 @@ export class OrdersController {
   @ApiBearerAuth()
   @Roles(RoleType.admin, RoleType.merchant, RoleType.employee)
   @ApiOperation({ summary: 'Update status' })
-  updateStatus(@Param('order_id', ParseUUIDPipe) id: string, @Body() dto: UpdateOrderStatusDto): Promise<OrderResponseDto> {
+  updateStatus(
+    @Param('order_id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrderStatusDto,
+  ): Promise<OrderResponseDto> {
     return this.service.updateStatus(id, dto);
   }
 }

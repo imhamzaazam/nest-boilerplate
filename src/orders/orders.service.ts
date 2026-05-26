@@ -1,7 +1,16 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
 import { CartStatus, OrderStatus, DiscountType, Prisma } from '@prisma/client';
-import { CreateOrderDto, UpdateOrderStatusDto, OrderResponseDto, CreateOrderResponseDto } from './dto/order.dto';
+import {
+  CreateOrderDto,
+  UpdateOrderStatusDto,
+  OrderResponseDto,
+  CreateOrderResponseDto,
+} from './dto/order.dto';
 
 @Injectable()
 export class OrdersService {
@@ -10,18 +19,29 @@ export class OrdersService {
   async create(dto: CreateOrderDto): Promise<CreateOrderResponseDto> {
     const cart = await this.prisma.cart.findUnique({
       where: { id: dto.cart_id },
-      include: { items: { include: { product: { include: { addons: true } }, discount: true } } },
+      include: {
+        items: {
+          include: { product: { include: { addons: true } }, discount: true },
+        },
+      },
     });
     if (!cart) throw new NotFoundException('Cart not found');
-    if (cart.status !== CartStatus.active) throw new BadRequestException('Cart already ordered');
+    if (cart.status !== CartStatus.active)
+      throw new BadRequestException('Cart already ordered');
     if (cart.items.length === 0) throw new BadRequestException('Cart is empty');
 
     const vatRule = await this.prisma.vatRule.findUnique({
-      where: { merchantId_paymentType: { merchantId: cart.merchantId, paymentType: dto.payment_type } },
+      where: {
+        merchantId_paymentType: {
+          merchantId: cart.merchantId,
+          paymentType: dto.payment_type,
+        },
+      },
     });
     const vatRate = vatRule?.rate.toNumber() ?? 0;
 
-    let subtotal = 0, totalTax = 0;
+    let subtotal = 0,
+      totalTax = 0;
     const lineItems: any[] = [];
     const orderItems: any[] = [];
     const orderAddons: any[] = [];
@@ -29,8 +49,13 @@ export class OrdersService {
     for (const item of cart.items) {
       const basePrice = item.product.basePrice.toNumber();
       const baseAmount = basePrice * item.quantity;
-      const addons = item.product.addons.filter((a) => item.addonIds.includes(a.id));
-      const addonAmount = addons.reduce((s, a) => s + a.price.toNumber() * item.quantity, 0);
+      const addons = item.product.addons.filter((a) =>
+        item.addonIds.includes(a.id),
+      );
+      const addonAmount = addons.reduce(
+        (s, a) => s + a.price.toNumber() * item.quantity,
+        0,
+      );
 
       for (const a of addons) {
         orderAddons.push({
@@ -46,9 +71,10 @@ export class OrdersService {
       const itemSubtotal = baseAmount + addonAmount;
       let discountAmount = 0;
       if (item.discount) {
-        discountAmount = item.discount.type === DiscountType.flat
-          ? Math.min(item.discount.value.toNumber(), itemSubtotal)
-          : (itemSubtotal * item.discount.value.toNumber()) / 100;
+        discountAmount =
+          item.discount.type === DiscountType.flat
+            ? Math.min(item.discount.value.toNumber(), itemSubtotal)
+            : (itemSubtotal * item.discount.value.toNumber()) / 100;
       }
 
       const afterDiscount = itemSubtotal - discountAmount;
@@ -84,7 +110,12 @@ export class OrdersService {
 
       if (item.product.trackInventory) {
         await this.prisma.productInventory.update({
-          where: { productId_branchId: { productId: item.productId, branchId: cart.branchId } },
+          where: {
+            productId_branchId: {
+              productId: item.productId,
+              branchId: cart.branchId,
+            },
+          },
           data: { quantity: { decrement: item.quantity } },
         });
       }
@@ -139,7 +170,10 @@ export class OrdersService {
         });
       }
 
-      await tx.cart.update({ where: { id: cart.id }, data: { status: CartStatus.ordered, orderedAt: new Date() } });
+      await tx.cart.update({
+        where: { id: cart.id },
+        data: { status: CartStatus.ordered, orderedAt: new Date() },
+      });
       return newOrder;
     });
 
@@ -171,10 +205,16 @@ export class OrdersService {
     return orders.map((o) => this.toResponse(o));
   }
 
-  async updateStatus(id: string, dto: UpdateOrderStatusDto): Promise<OrderResponseDto> {
+  async updateStatus(
+    id: string,
+    dto: UpdateOrderStatusDto,
+  ): Promise<OrderResponseDto> {
     const order = await this.prisma.order.findUnique({ where: { id } });
     if (!order) throw new NotFoundException('Order not found');
-    const updated = await this.prisma.order.update({ where: { id }, data: { status: dto.status } });
+    const updated = await this.prisma.order.update({
+      where: { id },
+      data: { status: dto.status },
+    });
     return this.toResponse(updated);
   }
 
@@ -204,7 +244,13 @@ export class OrdersService {
         discount_amount: i.discountAmount?.toNumber?.() ?? i.discountAmount,
         tax_amount: i.taxAmount?.toNumber?.() ?? i.taxAmount,
         line_total: i.lineTotal?.toNumber?.() ?? i.lineTotal,
-        product: i.product ? { id: i.product.id, name: i.product.name, base_price: i.product.basePrice?.toNumber?.() } : undefined,
+        product: i.product
+          ? {
+              id: i.product.id,
+              name: i.product.name,
+              base_price: i.product.basePrice?.toNumber?.(),
+            }
+          : undefined,
         addons: i.addons?.map((a: any) => ({
           addon_id: a.addonId,
           addon_name: a.addonName,
