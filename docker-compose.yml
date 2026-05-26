@@ -9,8 +9,8 @@ services:
       - 3000:3000
     restart: always
     volumes:
-      - .:/usr/src/app
-      - /usr/src/app/node_modules
+      - .:/app
+      - /app/node_modules
     depends_on:
       - postgres
     env_file:
@@ -22,7 +22,7 @@ services:
     container_name: go-delivery-db
     restart: always
     ports:
-      - 5432:5432
+      - 5433:5432
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-prisma}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-topsecret}

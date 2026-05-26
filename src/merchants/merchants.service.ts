@@ -1,5 +1,9 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
 import {
   CreateMerchantDto,
@@ -14,8 +18,11 @@ export class MerchantsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateMerchantDto): Promise<MerchantResponseDto> {
-    const existing = await this.prisma.merchant.findUnique({ where: { ntn: dto.ntn } });
-    if (existing) throw new ConflictException('Merchant with this NTN already exists');
+    const existing = await this.prisma.merchant.findUnique({
+      where: { ntn: dto.ntn },
+    });
+    if (existing)
+      throw new ConflictException('Merchant with this NTN already exists');
 
     const slug = `${dto.name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now().toString(36)}`;
     const merchant = await this.prisma.merchant.create({
@@ -32,7 +39,9 @@ export class MerchantsService {
   }
 
   async findAll(): Promise<MerchantResponseDto[]> {
-    const merchants = await this.prisma.merchant.findMany({ orderBy: { createdAt: 'desc' } });
+    const merchants = await this.prisma.merchant.findMany({
+      orderBy: { createdAt: 'desc' },
+    });
     return merchants.map(this.toResponse);
   }
 
@@ -42,12 +51,17 @@ export class MerchantsService {
     return this.toResponse(merchant);
   }
 
-  async update(id: string, dto: UpdateMerchantDto): Promise<MerchantResponseDto> {
+  async update(
+    id: string,
+    dto: UpdateMerchantDto,
+  ): Promise<MerchantResponseDto> {
     const merchant = await this.prisma.merchant.findUnique({ where: { id } });
     if (!merchant) throw new NotFoundException('Merchant not found');
 
     if (dto.ntn && dto.ntn !== merchant.ntn) {
-      const existing = await this.prisma.merchant.findUnique({ where: { ntn: dto.ntn } });
+      const existing = await this.prisma.merchant.findUnique({
+        where: { ntn: dto.ntn },
+      });
       if (existing) throw new ConflictException('NTN already exists');
     }
 
@@ -64,8 +78,13 @@ export class MerchantsService {
     return this.toResponse(updated);
   }
 
-  async bootstrapActor(merchantId: string, dto: BootstrapActorDto): Promise<ActorResponseDto> {
-    const merchant = await this.prisma.merchant.findUnique({ where: { id: merchantId } });
+  async bootstrapActor(
+    merchantId: string,
+    dto: BootstrapActorDto,
+  ): Promise<ActorResponseDto> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+    });
     if (!merchant) throw new NotFoundException('Merchant not found');
 
     const existing = await this.prisma.actor.findUnique({
@@ -83,12 +102,23 @@ export class MerchantsService {
       });
       if (!role) {
         role = await tx.role.create({
-          data: { merchantId, roleType: dto.role, description: `${dto.role} role` },
+          data: {
+            merchantId,
+            roleType: dto.role,
+            description: `${dto.role} role`,
+          },
         });
       }
 
       const newActor = await tx.actor.create({
-        data: { merchantId, email: dto.email, passwordHash, firstName, lastName, isActive: true },
+        data: {
+          merchantId,
+          email: dto.email,
+          passwordHash,
+          firstName,
+          lastName,
+          isActive: true,
+        },
       });
 
       await tx.actorRole.create({

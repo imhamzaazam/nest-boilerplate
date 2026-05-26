@@ -1,5 +1,9 @@
-import { Injectable, ConflictException, NotFoundException } from '@nestjs/common';
-import * as bcrypt from 'bcrypt';
+import {
+  Injectable,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
+import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
 import { RoleType } from '@prisma/client';
@@ -9,7 +13,10 @@ import { CreateActorDto, ActorResponseDto } from './dto/actor.dto';
 export class ActorsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async create(merchantId: string, dto: CreateActorDto): Promise<ActorResponseDto> {
+  async create(
+    merchantId: string,
+    dto: CreateActorDto,
+  ): Promise<ActorResponseDto> {
     const existing = await this.prisma.actor.findUnique({
       where: { merchantId_email: { merchantId, email: dto.email } },
     });
@@ -32,7 +39,14 @@ export class ActorsService {
       }
 
       const newActor = await tx.actor.create({
-        data: { merchantId, email: dto.email, passwordHash, firstName, lastName, isActive: true },
+        data: {
+          merchantId,
+          email: dto.email,
+          passwordHash,
+          firstName,
+          lastName,
+          isActive: true,
+        },
       });
 
       await tx.actorRole.create({
@@ -59,7 +73,9 @@ export class ActorsService {
     return actors.map(this.toResponse);
   }
 
-  async findEmployeesByMerchant(merchantId: string): Promise<ActorResponseDto[]> {
+  async findEmployeesByMerchant(
+    merchantId: string,
+  ): Promise<ActorResponseDto[]> {
     const actors = await this.prisma.actor.findMany({
       where: {
         merchantId,

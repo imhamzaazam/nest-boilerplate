@@ -5,7 +5,7 @@ import {
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
 import { RoleType } from '@prisma/client';
@@ -34,7 +34,11 @@ export class AuthService {
     private readonly configService: ConfigService,
   ) {}
 
-  async login(dto: LoginDto, userAgent?: string, clientIp?: string): Promise<LoginResponseDto> {
+  async login(
+    dto: LoginDto,
+    userAgent?: string,
+    clientIp?: string,
+  ): Promise<LoginResponseDto> {
     const actor = await this.prisma.actor.findUnique({
       where: {
         merchantId_email: {
@@ -57,7 +61,10 @@ export class AuthService {
       throw new UnauthorizedException('Account is deactivated');
     }
 
-    const isPasswordValid = await bcrypt.compare(dto.password, actor.passwordHash);
+    const isPasswordValid = await bcrypt.compare(
+      dto.password,
+      actor.passwordHash,
+    );
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid credentials');
     }

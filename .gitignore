@@ -39,3 +39,4 @@ dock
 # Generated docs
 /swagger.json
 /swagger.yaml
+.mcp*
