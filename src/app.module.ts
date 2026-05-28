@@ -17,6 +17,7 @@ import { OrdersModule } from './orders/orders.module';
 import { GeoModule } from './geo/geo.module';
 import { ServiceZonesModule } from './service-zones/service-zones.module';
 import { ReportsModule } from './reports/reports.module';
+import { UploadsModule } from './uploads/uploads.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { ReportsModule } from './reports/reports.module';
     GeoModule,
     ServiceZonesModule,
     ReportsModule,
+    UploadsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

@@ -2,9 +2,11 @@ import {
   Injectable,
   ConflictException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
+import { BranchStatus, PaymentType, Prisma } from '@prisma/client';
 import {
   CreateMerchantDto,
   UpdateMerchantDto,
@@ -12,6 +14,15 @@ import {
   BootstrapActorDto,
   ActorResponseDto,
 } from './dto/merchant.dto';
+import {
+  MerchantSettingsResponseDto,
+  UpdateMerchantSettingsDto,
+} from './dto/merchant-settings.dto';
+import { defaultVatRules, mapVatRules } from './merchant-settings.util';
+import {
+  MAX_FEATURED_PRODUCTS,
+  parseFeaturedProductIds,
+} from './featured-products.util';
 
 @Injectable()
 export class MerchantsService {
@@ -68,14 +79,143 @@ export class MerchantsService {
     const updated = await this.prisma.merchant.update({
       where: { id },
       data: {
-        name: dto.name,
-        ntn: dto.ntn,
-        address: dto.address,
-        category: dto.category,
-        contactNumber: dto.contact_number,
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.ntn !== undefined && { ntn: dto.ntn }),
+        ...(dto.address !== undefined && { address: dto.address }),
+        ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.contact_number !== undefined && {
+          contactNumber: dto.contact_number,
+        }),
+        ...(dto.currency !== undefined && { currency: dto.currency }),
       },
     });
     return this.toResponse(updated);
+  }
+
+  async getStorefrontSettings(
+    merchantId: string,
+  ): Promise<{
+    currency: string;
+    featured_product_ids: string[];
+    branch_id: string;
+  }> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { currency: true, featuredProductIds: true },
+    });
+    if (!merchant) throw new NotFoundException('Merchant not found');
+
+    const branch = await this.prisma.branch.findFirst({
+      where: { merchantId, status: BranchStatus.active },
+      orderBy: { createdAt: 'asc' },
+      select: { id: true },
+    });
+    if (!branch) {
+      throw new NotFoundException('No active branch found for merchant');
+    }
+
+    return {
+      currency: merchant.currency,
+      featured_product_ids: parseFeaturedProductIds(
+        merchant.featuredProductIds,
+      ),
+      branch_id: branch.id,
+    };
+  }
+
+  async getSettings(merchantId: string): Promise<MerchantSettingsResponseDto> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      include: {
+        vatRules: { orderBy: { paymentType: 'asc' } },
+      },
+    });
+    if (!merchant) throw new NotFoundException('Merchant not found');
+
+    return {
+      currency: merchant.currency,
+      vat_rules: mapVatRules(merchant.vatRules),
+      featured_product_ids: parseFeaturedProductIds(
+        merchant.featuredProductIds,
+      ),
+    };
+  }
+
+  async updateSettings(
+    merchantId: string,
+    dto: UpdateMerchantSettingsDto,
+  ): Promise<MerchantSettingsResponseDto> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      include: { vatRules: true },
+    });
+    if (!merchant) throw new NotFoundException('Merchant not found');
+
+    await this.prisma.$transaction(async (tx) => {
+      if (dto.currency !== undefined) {
+        await tx.merchant.update({
+          where: { id: merchantId },
+          data: { currency: dto.currency },
+        });
+      }
+
+      if (dto.vat_rules?.length) {
+        for (const rule of dto.vat_rules) {
+          await tx.vatRule.upsert({
+            where: {
+              merchantId_paymentType: {
+                merchantId,
+                paymentType: rule.payment_type,
+              },
+            },
+            create: {
+              merchantId,
+              paymentType: rule.payment_type,
+              rate: new Prisma.Decimal(rule.rate),
+            },
+            update: {
+              rate: new Prisma.Decimal(rule.rate),
+            },
+          });
+        }
+      }
+
+      if (dto.featured_product_ids !== undefined) {
+        const featuredIds = dto.featured_product_ids;
+        if (featuredIds.length > MAX_FEATURED_PRODUCTS) {
+          throw new BadRequestException(
+            `You can feature at most ${MAX_FEATURED_PRODUCTS} products`,
+          );
+        }
+
+        const uniqueIds = [...new Set(featuredIds)];
+        if (uniqueIds.length !== featuredIds.length) {
+          throw new BadRequestException('Duplicate featured products are not allowed');
+        }
+
+        if (uniqueIds.length > 0) {
+          const validCount = await tx.product.count({
+            where: {
+              merchantId,
+              id: { in: uniqueIds },
+              isActive: true,
+            },
+          });
+          if (validCount !== uniqueIds.length) {
+            throw new BadRequestException(
+              'One or more featured products are invalid or unavailable',
+            );
+          }
+        }
+
+        await tx.merchant.update({
+          where: { id: merchantId },
+          data: { featuredProductIds: uniqueIds },
+        });
+      }
+    });
+
+    return this.getSettings(merchantId);
   }
 
   async bootstrapActor(
@@ -147,6 +287,7 @@ export class MerchantsService {
       logo: m.logo,
       category: m.category,
       contact_number: m.contactNumber,
+      currency: m.currency,
       created_at: m.createdAt,
       updated_at: m.updatedAt,
     };

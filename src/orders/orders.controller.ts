@@ -3,19 +3,25 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Body,
   Param,
   ParseUUIDPipe,
+  Query,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { OrdersService } from './orders.service';
 import {
   CreateOrderDto,
+  UpdateOrderDto,
   UpdateOrderStatusDto,
   OrderResponseDto,
   CreateOrderResponseDto,
+  OrderStatusesResponseDto,
+  ListOrdersResponseDto,
 } from './dto/order.dto';
+import { ListOrdersQueryDto } from './dto/list-orders-query.dto';
 import { Public } from '@/auth/decorators/public.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
@@ -33,6 +39,13 @@ export class OrdersController {
     return this.service.create(dto);
   }
 
+  @Get('statuses')
+  @Public()
+  @ApiOperation({ summary: 'List all order delivery statuses' })
+  getStatuses(): OrderStatusesResponseDto {
+    return this.service.getOrderStatuses();
+  }
+
   @Get(':order_id')
   @Public()
   @ApiOperation({ summary: 'Get order' })
@@ -40,6 +53,13 @@ export class OrdersController {
     @Param('order_id', ParseUUIDPipe) id: string,
   ): Promise<OrderResponseDto> {
     return this.service.findOne(id);
+  }
+
+  @Get()
+  @Public()
+  @ApiOperation({ summary: 'List all orders' })
+  findAll(@Query() query: ListOrdersQueryDto): Promise<ListOrdersResponseDto> {
+    return this.service.findAll('', query);
   }
 
   @Patch(':order_id')
@@ -62,7 +82,34 @@ export class MerchantOrdersController {
 
   @Get()
   @ApiOperation({ summary: 'List orders' })
-  findAll(@CurrentUser() user: AuthenticatedUser): Promise<OrderResponseDto[]> {
-    return this.service.findAllByMerchant(user.merchantId);
+  findAll(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: ListOrdersQueryDto,
+  ): Promise<ListOrdersResponseDto> {
+    return this.service.findAll(user.merchantId, query);
+  }
+
+  @Patch(':order_id/status')
+  @ApiOperation({ summary: 'Update order status' })
+  updateStatus(
+    @Param('order_id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrderStatusDto,
+  ): Promise<OrderResponseDto> {
+    return this.service.updateStatus(id, dto);
+  }
+
+  @Patch(':order_id')
+  @ApiOperation({ summary: 'Update order' })
+  update(
+    @Param('order_id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateOrderDto,
+  ): Promise<OrderResponseDto> {
+    return this.service.update(id, dto);
+  }
+
+  @Delete(':order_id')
+  @ApiOperation({ summary: 'Delete order' })
+  delete(@Param('order_id', ParseUUIDPipe) id: string): Promise<void> {
+    return this.service.delete(id);
   }
 }

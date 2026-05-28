@@ -5,7 +5,6 @@ generator client {
 
 datasource db {
   provider   = "postgresql"
-  url        = env("DATABASE_URL")
   extensions = [postgis]
 }
 
@@ -62,6 +61,14 @@ enum CityType {
   @@map("city_type")
 }
 
+enum BranchStatus {
+  active
+  pending
+  suspended
+
+  @@map("branch_status_type")
+}
+
 enum CartStatus {
   active
   ordered
@@ -82,37 +89,46 @@ model Merchant {
   logo          String?          @db.Text
   category      MerchantCategory
   contactNumber String           @map("contact_number") @db.VarChar(20)
+  currency            String           @default("PKR") @map("currency")
+  featuredProductIds  Json?            @map("featured_product_ids")
+  vatRate             Decimal          @default(0.0) @map("vat_rate") @db.Decimal(5, 2)
+  operatingHours      Json?            @map("operating_hours")
   createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz
 
-  branches            Branch[]
-  actors              Actor[]
-  roles               Role[]
-  sessions            Session[]
-  productCategories   ProductCategory[]
-  products            Product[]
-  discounts           MerchantDiscount[]
-  vatRules            VatRule[]
-  carts               Cart[]
-  orders              Order[]
+  branches             Branch[]
+  actors               Actor[]
+  roles                Role[]
+  sessions             Session[]
+  productCategories    ProductCategory[]
+  products             Product[]
+  discounts            MerchantDiscount[]
+  vatRules             VatRule[]
+  carts                Cart[]
+  orders               Order[]
   merchantServiceZones MerchantServiceZone[]
 
   @@map("merchants")
 }
 
 model Branch {
-  id                 String   @id @default(uuid())
-  merchantId         String   @map("merchant_id")
-  name               String   @db.VarChar(255)
-  address            String   @db.Text
-  contactNumber      String   @map("contact_number") @db.VarChar(20)
+  id                 String       @id @default(uuid())
+  merchantId         String       @map("merchant_id")
+  branchCode         String?      @map("branch_code") @db.VarChar(32)
+  name               String       @db.VarChar(255)
+  address            String       @db.Text
+  contactName        String?      @map("contact_name") @db.VarChar(255)
+  contactEmail       String?      @map("contact_email") @db.VarChar(255)
+  contactNumber      String       @map("contact_number") @db.VarChar(20)
   city               CityType
-  openingTimeMinutes Int      @map("opening_time_minutes") @db.SmallInt
-  closingTimeMinutes Int      @map("closing_time_minutes") @db.SmallInt
-  is24Hours          Boolean  @default(false) @map("is_24_hours")
-  days               String[] @default(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])
-  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz
-  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz
+  status             BranchStatus @default(active)
+  operatingHours     Json?        @map("operating_hours")
+  openingTimeMinutes Int          @map("opening_time_minutes") @db.SmallInt
+  closingTimeMinutes Int          @map("closing_time_minutes") @db.SmallInt
+  is24Hours          Boolean      @default(false) @map("is_24_hours")
+  days               String[]     @default(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY", "SUNDAY"])
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz
 
   merchant             Merchant              @relation(fields: [merchantId], references: [id], onDelete: Cascade)
   inventory            ProductInventory[]
@@ -230,12 +246,12 @@ model Product {
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz
 
-  merchant  Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  category  ProductCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  addons    ProductAddon[]
-  inventory ProductInventory[]
-  discounts MerchantDiscount[]
-  cartItems CartItem[]
+  merchant   Merchant           @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  category   ProductCategory    @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  addons     ProductAddon[]
+  inventory  ProductInventory[]
+  discounts  MerchantDiscount[]
+  cartItems  CartItem[]
   orderItems OrderItem[]
 
   @@unique([merchantId, categoryId, name])
@@ -251,7 +267,7 @@ model ProductAddon {
   price     Decimal  @db.Decimal(10, 2)
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
 
-  product         Product           @relation(fields: [productId], references: [id], onDelete: Cascade)
+  product         Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
   orderItemAddons OrderItemAddon[]
 
   @@unique([productId, name])
@@ -359,13 +375,16 @@ model CartItem {
 
 model Order {
   id              String      @id @default(uuid())
+  orderNumber     String      @unique @map("order_number")
   cartId          String      @unique @map("cart_id")
   merchantId      String      @map("merchant_id")
+  zoneId          String?     @map("zone_id") // FK to Zone - nullable for non-zoned deliveries
   branchId        String      @map("branch_id")
   actorId         String?     @map("actor_id")
   paymentType     PaymentType @map("payment_type")
   vatRate         Decimal     @map("vat_rate") @db.Decimal(5, 2)
   totalAmount     Decimal     @map("total_amount") @db.Decimal(10, 2)
+  currency        String      @default("PKR")
   status          OrderStatus @default(pending)
   deliveryAddress String      @map("delivery_address") @db.Text
   customerName    String      @map("customer_name") @db.VarChar(255)
@@ -375,12 +394,14 @@ model Order {
 
   cart     Cart        @relation(fields: [cartId], references: [id], onDelete: Cascade)
   merchant Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  zone     Zone?       @relation("orders", fields: [zoneId], references: [id], onDelete: SetNull)
   branch   Branch      @relation(fields: [branchId], references: [id], onDelete: Cascade)
   actor    Actor?      @relation(fields: [actorId], references: [id], onDelete: SetNull)
   items    OrderItem[]
 
   @@index([merchantId])
   @@index([branchId])
+  @@index([zoneId])
   @@index([actorId])
   @@index([status])
   @@index([createdAt])
@@ -390,6 +411,7 @@ model Order {
 model OrderItem {
   orderId        String  @map("order_id")
   productId      String  @map("product_id")
+  zoneId         String? @map("zone_id")
   quantity       Int
   price          Decimal @db.Decimal(10, 2)
   baseAmount     Decimal @map("base_amount") @db.Decimal(10, 2)
@@ -397,14 +419,17 @@ model OrderItem {
   discountAmount Decimal @map("discount_amount") @db.Decimal(10, 2)
   taxAmount      Decimal @map("tax_amount") @db.Decimal(10, 2)
   lineTotal      Decimal @map("line_total") @db.Decimal(10, 2)
+  currency       String  @default("PKR")
 
   order   Order            @relation(fields: [orderId], references: [id], onDelete: Cascade)
   product Product          @relation(fields: [productId], references: [id], onDelete: Cascade)
+  zone    Zone?            @relation("orderItems", fields: [zoneId], references: [id], onDelete: SetNull)
   addons  OrderItemAddon[]
 
   @@id([orderId, productId])
   @@index([orderId])
   @@index([productId])
+  @@index([zoneId])
   @@map("order_items")
 }
 
@@ -442,15 +467,17 @@ model Area {
 }
 
 model Zone {
-  id             String                            @id @default(uuid())
-  areaId         String                            @map("area_id")
-  name           String                            @db.VarChar(255)
+  id             String                                  @id @default(uuid())
+  areaId         String                                  @map("area_id")
+  name           String                                  @db.VarChar(255)
   coordinates    Unsupported("geometry(Polygon, 4326)")?
-  coordinatesWkt String?                           @map("coordinates_wkt") @db.Text
-  createdAt      DateTime                          @default(now()) @map("created_at") @db.Timestamptz
+  coordinatesWkt String?                                 @map("coordinates_wkt") @db.Text
+  createdAt      DateTime                                @default(now()) @map("created_at") @db.Timestamptz
 
   area                 Area                  @relation(fields: [areaId], references: [id], onDelete: Cascade)
   merchantServiceZones MerchantServiceZone[]
+  orders               Order[]               @relation("orders")
+  orderItems           OrderItem[]           @relation("orderItems")
 
   @@unique([areaId, name])
   @@index([areaId])

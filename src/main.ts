@@ -1,11 +1,17 @@
 import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { GlobalExceptionFilter } from './infra/filters/http-exception.filter';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/api/uploads/',
+  });
 
   app.setGlobalPrefix('api/v1');
 
@@ -13,7 +19,7 @@ async function bootstrap() {
     new ValidationPipe({
       whitelist: true,
       transform: true,
-      forbidNonWhitelisted: true,
+      forbidNonWhitelisted: false,
       transformOptions: {
         enableImplicitConversion: true,
       },
@@ -22,11 +28,14 @@ async function bootstrap() {
 
   app.useGlobalFilters(new GlobalExceptionFilter());
 
-  app.enableCors();
+  app.enableCors({
+    origin: (origin, callback) => callback(null, true),
+  });
 
   const config = new DocumentBuilder()
     .setTitle('Go Delivery API')
-    .setDescription(`
+    .setDescription(
+      `
 ## Overview
 Tenant-aware delivery and commerce API with multi-merchant support.
 
@@ -46,11 +55,20 @@ Public endpoints (no auth required):
 ## Multi-tenancy
 Data is isolated per merchant. The \`merchant_id\` is extracted from the JWT token.
 For public endpoints, pass \`x-merchant-id\` header.
-    `)
+    `,
+    )
     .setVersion('1.0')
     .setContact('API Support', '', 'support@godelivery.com')
-    .addBearerAuth({ type: 'http', scheme: 'bearer', bearerFormat: 'JWT' }, 'JWT')
-    .addGlobalParameters({ name: 'x-merchant-id', in: 'header', required: false, description: 'Merchant ID for public endpoints' })
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      'JWT',
+    )
+    .addGlobalParameters({
+      name: 'x-merchant-id',
+      in: 'header',
+      required: false,
+      description: 'Merchant ID for public endpoints',
+    })
     .build();
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('docs', app, document);

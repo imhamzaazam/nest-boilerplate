@@ -55,6 +55,46 @@ export class ServiceZonesService {
     }));
   }
 
+  async remove(merchantId: string, assignmentId: string): Promise<void> {
+    const assignment = await this.prisma.merchantServiceZone.findUnique({
+      where: { id: assignmentId },
+    });
+    if (!assignment || assignment.merchantId !== merchantId) {
+      throw new NotFoundException('Service zone assignment not found');
+    }
+    await this.prisma.merchantServiceZone.delete({ where: { id: assignmentId } });
+  }
+
+  async findByBranch(
+    merchantId: string,
+    branchId: string,
+  ): Promise<ServiceZoneResponseDto[]> {
+    const branch = await this.prisma.branch.findUnique({ where: { id: branchId } });
+    if (!branch || branch.merchantId !== merchantId) {
+      throw new NotFoundException('Branch not found');
+    }
+
+    const szs = await this.prisma.merchantServiceZone.findMany({
+      where: { merchantId, branchId },
+      include: { zone: { include: { area: true } }, branch: true },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return szs.map((sz) => ({
+      id: sz.id,
+      merchant_id: sz.merchantId,
+      zone_id: sz.zone.id,
+      zone_name: sz.zone.name,
+      zone_coordinates_wkt: sz.zone.coordinatesWkt ?? '',
+      area_id: sz.zone.area.id,
+      area_name: sz.zone.area.name,
+      area_city: sz.zone.area.city,
+      branch_id: sz.branch.id,
+      branch_name: sz.branch.name,
+      created_at: sz.createdAt,
+    }));
+  }
+
   async checkCoverage(merchantId: string, dto: CheckCoverageDto): Promise<CoverageCheckResponseDto> {
     const result = await this.prisma.$queryRaw<any[]>`
       SELECT msz.id, msz.merchant_id, z.id as zone_id, z.name as zone_name,

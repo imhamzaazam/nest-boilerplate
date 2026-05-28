@@ -24,6 +24,7 @@ export class CartController {
   }
 
   @Get(':cart_id')
+  @Public()
   @ApiQuery({ name: 'payment_method', enum: PaymentType, required: false })
   @ApiOperation({ summary: 'Get cart' })
   findOne(
@@ -34,12 +35,14 @@ export class CartController {
   }
 
   @Post(':cart_id/items')
+  @Public()
   @ApiOperation({ summary: 'Add item' })
   addItem(@Param('cart_id', ParseUUIDPipe) id: string, @Body() dto: AddCartItemDto): Promise<CartItemResponseDto> {
     return this.service.addItem(id, dto);
   }
 
   @Patch(':cart_id/items/:item_id')
+  @Public()
   @ApiOperation({ summary: 'Update item' })
   updateItem(
     @Param('cart_id', ParseUUIDPipe) cartId: string,
@@ -50,6 +53,7 @@ export class CartController {
   }
 
   @Delete(':cart_id/items/:item_id')
+  @Public()
   @HttpCode(HttpStatus.NO_CONTENT)
   @ApiOperation({ summary: 'Remove item' })
   removeItem(

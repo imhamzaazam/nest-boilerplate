@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Patch, Body, Param, Headers, ParseUUIDPipe } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Delete,
+  Body,
+  Param,
+  Headers,
+  ParseUUIDPipe,
+  Query,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { CategoriesService } from './categories.service';
@@ -20,10 +31,20 @@ export class CategoriesController {
   findAll(
     @CurrentUser() user: AuthenticatedUser | undefined,
     @Headers('x-merchant-id') headerMerchantId?: string,
-  ): Promise<CategoryResponseDto[]> {
+    @Query('limit') limit?: number,
+    @Query('skip') skip?: number,
+  ): Promise<any> {
     const merchantId = user?.merchantId || headerMerchantId;
     if (!merchantId) throw new Error('Merchant ID required');
-    return this.service.findAllByMerchant(merchantId);
+    return this.service.findAllByMerchant(merchantId, limit, skip);
+  }
+
+  @Get(':categoryID')
+  @ApiBearerAuth()
+  @Roles(RoleType.admin, RoleType.merchant)
+  @ApiOperation({ summary: 'Get category by ID' })
+  findOne(@Param('categoryID', ParseUUIDPipe) id: string): Promise<CategoryResponseDto> {
+    return this.service.findOne(id);
   }
 
   @Post()
@@ -40,5 +61,13 @@ export class CategoriesController {
   @ApiOperation({ summary: 'Update category' })
   update(@Param('categoryID', ParseUUIDPipe) id: string, @Body() dto: UpdateCategoryDto): Promise<CategoryResponseDto> {
     return this.service.update(id, dto);
+  }
+
+  @Delete(':categoryID')
+  @ApiBearerAuth()
+  @Roles(RoleType.admin, RoleType.merchant)
+  @ApiOperation({ summary: 'Delete a category' })
+  delete(@Param('categoryID', ParseUUIDPipe) id: string): Promise<void> {
+    return this.service.delete(id);
   }
 }

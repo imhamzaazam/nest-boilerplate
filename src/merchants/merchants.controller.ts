@@ -1,5 +1,15 @@
-import { Controller, Get, Post, Patch, Body, Param, ParseUUIDPipe } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import {
+  Controller,
+  Get,
+  Post,
+  Patch,
+  Body,
+  Param,
+  Headers,
+  ParseUUIDPipe,
+  BadRequestException,
+} from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { MerchantsService } from './merchants.service';
 import {
@@ -9,6 +19,11 @@ import {
   BootstrapActorDto,
   ActorResponseDto,
 } from './dto/merchant.dto';
+import {
+  MerchantSettingsResponseDto,
+  UpdateMerchantSettingsDto,
+} from './dto/merchant-settings.dto';
+import { StorefrontSettingsResponseDto } from './dto/storefront-settings.dto';
 import { Public } from '@/auth/decorators/public.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
@@ -65,5 +80,36 @@ export class MerchantController {
     @Body() dto: UpdateMerchantDto,
   ): Promise<MerchantResponseDto> {
     return this.service.update(user.merchantId, dto);
+  }
+
+  @Get('storefront-settings')
+  @Public()
+  @ApiHeader({ name: 'x-merchant-id', required: true })
+  @ApiOperation({ summary: 'Public storefront settings (currency)' })
+  getStorefrontSettings(
+    @Headers('x-merchant-id') merchantId?: string,
+  ): Promise<StorefrontSettingsResponseDto> {
+    if (!merchantId) {
+      throw new BadRequestException('x-merchant-id header is required');
+    }
+    return this.service.getStorefrontSettings(merchantId);
+  }
+
+  @Get('settings')
+  @ApiOperation({ summary: 'Get merchant settings (currency, hours, VAT)' })
+  getSettings(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<MerchantSettingsResponseDto> {
+    return this.service.getSettings(user.merchantId);
+  }
+
+  @Patch('settings')
+  @Roles(RoleType.admin, RoleType.merchant)
+  @ApiOperation({ summary: 'Update merchant settings (currency, hours, VAT)' })
+  updateSettings(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: UpdateMerchantSettingsDto,
+  ): Promise<MerchantSettingsResponseDto> {
+    return this.service.updateSettings(user.merchantId, dto);
   }
 }

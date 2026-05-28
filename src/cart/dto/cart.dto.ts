@@ -52,4 +52,5 @@ export class CartResponseDto {
   @ApiProperty() total_vat: number;
   @ApiProperty() vat_rate: number;
   @ApiProperty() total_price: number;
+  @ApiProperty() currency: string;
 }

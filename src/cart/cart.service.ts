@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '@/infra/config/prisma/prisma.service';
 import { CartStatus, PaymentType, DiscountType, Prisma } from '@prisma/client';
+import { DEFAULT_CURRENCY } from '@/common/currency.util';
 import {
   CreateCartDto,
   AddCartItemDto,
@@ -44,10 +45,22 @@ export class CartService {
     });
     if (!cart) throw new NotFoundException('Cart not found');
 
-    const vatRule = await this.prisma.vatRule.findUnique({
-      where: { merchantId_paymentType: { merchantId: cart.merchantId, paymentType: paymentMethod } },
-    });
+    const [vatRule, merchant] = await Promise.all([
+      this.prisma.vatRule.findUnique({
+        where: {
+          merchantId_paymentType: {
+            merchantId: cart.merchantId,
+            paymentType: paymentMethod,
+          },
+        },
+      }),
+      this.prisma.merchant.findUnique({
+        where: { id: cart.merchantId },
+        select: { currency: true },
+      }),
+    ]);
     const vatRate = vatRule?.rate.toNumber() ?? 0;
+    const currency = merchant?.currency ?? DEFAULT_CURRENCY;
 
     let subtotal = 0, totalVat = 0;
     const products = cart.items.map((item) => {
@@ -90,6 +103,7 @@ export class CartService {
       total_vat: Math.round(totalVat * 100) / 100,
       vat_rate: vatRate,
       total_price: Math.round((subtotal + totalVat) * 100) / 100,
+      currency,
     };
   }
 
@@ -104,6 +118,22 @@ export class CartService {
         where: { productId_branchId: { productId: dto.product_id, branchId: cart.branchId } },
       });
       if (!inv || inv.quantity < dto.quantity) throw new BadRequestException('Insufficient inventory');
+    }
+
+    const existing = await this.prisma.cartItem.findFirst({
+      where: { cartId, productId: dto.product_id },
+    });
+
+    if (existing) {
+      const updated = await this.prisma.cartItem.update({
+        where: { id: existing.id },
+        data: { quantity: existing.quantity + dto.quantity },
+      });
+      return {
+        item_id: updated.id,
+        product_id: updated.productId,
+        quantity: updated.quantity,
+      };
     }
 
     let discountAmount: number | undefined;

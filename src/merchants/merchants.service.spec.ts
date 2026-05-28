@@ -7,7 +7,18 @@ import { MerchantCategory } from '@prisma/client';
 describe('MerchantsService', () => {
   let service: MerchantsService;
 
-  const mockPrisma = {
+  const mockPrisma: {
+    merchant: {
+      findUnique: jest.Mock;
+      findMany: jest.Mock;
+      create: jest.Mock;
+      update: jest.Mock;
+    };
+    actor: { findUnique: jest.Mock };
+    role: { findUnique: jest.Mock; create: jest.Mock };
+    actorRole: { create: jest.Mock };
+    $transaction: jest.Mock;
+  } = {
     merchant: {
       findUnique: jest.fn(),
       findMany: jest.fn(),
@@ -24,7 +35,7 @@ describe('MerchantsService', () => {
     actorRole: {
       create: jest.fn(),
     },
-    $transaction: jest.fn((fn) => fn(mockPrisma)),
+    $transaction: jest.fn((fn: (tx: typeof mockPrisma) => unknown) => fn(mockPrisma)),
   };
 
   beforeEach(async () => {

@@ -1,7 +1,13 @@
 import { Controller, Get, Query } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { ReportsService } from './reports.service';
-import { SalesReportQueryDto, SalesReportResponseDto } from './dto/report.dto';
+import {
+  SalesReportQueryDto,
+  SalesReportResponseDto,
+  DashboardMetricsResponseDto,
+  AnalyticsQueryDto,
+  AnalyticsResponseDto,
+} from './dto/report.dto';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '@/auth/auth.service';
 
@@ -18,5 +24,22 @@ export class ReportsController {
     @Query() query: SalesReportQueryDto,
   ): Promise<SalesReportResponseDto> {
     return this.service.getSalesReport(user.merchantId, query);
+  }
+
+  @Get('dashboard')
+  @ApiOperation({ summary: 'Get dashboard metrics' })
+  getDashboardMetrics(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<DashboardMetricsResponseDto> {
+    return this.service.getDashboardMetrics(user.merchantId);
+  }
+
+  @Get('analytics')
+  @ApiOperation({ summary: 'Get analytics data' })
+  getAnalytics(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: AnalyticsQueryDto,
+  ): Promise<AnalyticsResponseDto> {
+    return this.service.getAnalytics(user.merchantId, query);
   }
 }

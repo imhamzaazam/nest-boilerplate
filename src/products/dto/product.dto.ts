@@ -1,5 +1,13 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString, IsUUID, Min } from 'class-validator';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsNumber,
+  IsOptional,
+  IsString,
+  IsUUID,
+  Min,
+} from 'class-validator';
 
 export class CreateProductDto {
   @ApiProperty() @IsUUID() category_id: string;
@@ -10,16 +18,37 @@ export class CreateProductDto {
   @ApiPropertyOptional() @IsBoolean() @IsOptional() track_inventory?: boolean;
 }
 
+export class UpdateProductDto {
+  @ApiPropertyOptional() @IsUUID() @IsOptional() category_id?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() name?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() description?: string;
+  @ApiPropertyOptional() @IsNumber() @Min(0) @IsOptional() base_price?: number;
+  @ApiPropertyOptional() @IsString() @IsOptional() image_url?: string;
+  @ApiPropertyOptional() @IsBoolean() @IsOptional() track_inventory?: boolean;
+  @ApiPropertyOptional() @IsBoolean() @IsOptional() is_active?: boolean;
+}
+
 export class CreateAddonDto {
   @ApiProperty() @IsString() @IsNotEmpty() name: string;
   @ApiProperty() @IsNumber() @Min(0) price: number;
+}
+
+export class UpdateAddonDto {
+  @ApiPropertyOptional() @IsString() @IsOptional() name?: string;
+  @ApiPropertyOptional() @IsNumber() @Min(0) @IsOptional() price?: number;
+}
+
+export class ProductCategoryDto {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
 }
 
 export class ProductResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() merchant_id: string;
   @ApiProperty() category_id: string;
-  @ApiPropertyOptional() category_name?: string;
+  @ApiPropertyOptional({ type: () => ProductCategoryDto })
+  category?: ProductCategoryDto;
   @ApiProperty() name: string;
   @ApiPropertyOptional() description?: string;
   @ApiProperty() base_price: number;
@@ -28,6 +57,8 @@ export class ProductResponseDto {
   @ApiProperty() is_active: boolean;
   @ApiProperty() created_at: Date;
   @ApiProperty() updated_at: Date;
+  @ApiProperty() currency: string;
+  @ApiProperty() is_featured: boolean;
 }
 
 export class AddonResponseDto {

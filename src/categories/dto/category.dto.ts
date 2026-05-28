@@ -7,6 +7,8 @@ export class CreateCategoryDto {
 }
 
 export class UpdateCategoryDto {
+  @ApiPropertyOptional() @IsString() @IsOptional() name?: string;
+  @ApiPropertyOptional() @IsString() @IsOptional() description?: string;
   @ApiPropertyOptional() @IsBoolean() @IsOptional() is_available?: boolean;
 }
 

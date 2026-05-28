@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Headers } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Body, Headers, Param, ParseUUIDPipe } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { ServiceZonesService } from './service-zones.service';
@@ -32,6 +32,27 @@ export class ServiceZonesController {
   @ApiOperation({ summary: 'Create service zone' })
   create(@CurrentUser() user: AuthenticatedUser, @Body() dto: CreateServiceZoneDto): Promise<ServiceZoneResponseDto> {
     return this.service.create(user.merchantId, dto);
+  }
+
+  @Get('branch/:branch_id')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'List delivery zones for a branch' })
+  findByBranch(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('branch_id', ParseUUIDPipe) branchId: string,
+  ): Promise<ServiceZoneResponseDto[]> {
+    return this.service.findByBranch(user.merchantId, branchId);
+  }
+
+  @Delete(':assignment_id')
+  @ApiBearerAuth()
+  @Roles(RoleType.admin, RoleType.merchant)
+  @ApiOperation({ summary: 'Remove zone assignment from branch' })
+  remove(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('assignment_id', ParseUUIDPipe) assignmentId: string,
+  ): Promise<void> {
+    return this.service.remove(user.merchantId, assignmentId);
   }
 
   @Post('check')
