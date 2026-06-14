@@ -18,13 +18,22 @@ export class CategoriesService {
     limit?: number,
     skip?: number,
   ): Promise<any> {
+    const parsedLimit =
+      limit !== undefined && Number.isFinite(Number(limit)) && Number(limit) > 0
+        ? Number(limit)
+        : undefined;
+    const parsedSkip =
+      skip !== undefined && Number.isFinite(Number(skip)) && Number(skip) >= 0
+        ? Number(skip)
+        : undefined;
+
     const where = { merchantId };
     const [cats, total] = await Promise.all([
       this.prisma.productCategory.findMany({
         where,
         orderBy: { createdAt: 'desc' },
-        skip: skip || 0,
-        take: limit || 10,
+        ...(parsedSkip !== undefined ? { skip: parsedSkip } : {}),
+        ...(parsedLimit !== undefined ? { take: parsedLimit } : {}),
       }),
       this.prisma.productCategory.count({ where }),
     ]);

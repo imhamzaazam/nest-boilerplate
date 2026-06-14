@@ -7,10 +7,14 @@ import {
   CreateProductDto,
   UpdateProductDto,
   ProductResponseDto,
+  PosProductResponseDto,
+  PosProductsListResponseDto,
   CreateAddonDto,
   UpdateAddonDto,
   AddonResponseDto,
 } from './dto/product.dto';
+
+const POS_UNAVAILABLE_TAG = 'Unavailable';
 
 @Injectable()
 export class ProductsService {
@@ -79,6 +83,60 @@ export class ProductsService {
     return {
       items: products.map((p) =>
         this.toProductResponse(p, currency, featuredIds),
+      ),
+      total,
+      currency,
+    };
+  }
+
+  async findAllForPos(
+    merchantId: string,
+    category?: string,
+    minPrice?: number,
+    maxPrice?: number,
+    limit?: number,
+    skip?: number,
+  ): Promise<PosProductsListResponseDto> {
+    const parsedLimit =
+      limit !== undefined && Number.isFinite(Number(limit)) && Number(limit) > 0
+        ? Number(limit)
+        : undefined;
+    const parsedSkip =
+      skip !== undefined && Number.isFinite(Number(skip)) && Number(skip) >= 0
+        ? Number(skip)
+        : undefined;
+
+    const where: Prisma.ProductWhereInput = { merchantId };
+    if (category) {
+      where.categoryId = category;
+    }
+    if (minPrice || maxPrice) {
+      where.basePrice = {};
+      if (minPrice) {
+        where.basePrice.gte = minPrice;
+      }
+      if (maxPrice) {
+        where.basePrice.lte = maxPrice;
+      }
+    }
+
+    const { currency, featuredIds } =
+      await this.getMerchantProductContext(merchantId);
+
+    const [products, total] = await Promise.all([
+      this.prisma.product.findMany({
+        where,
+        include: { category: { select: { id: true, name: true } } },
+        orderBy: [{ isActive: 'desc' }, { name: 'asc' }],
+        ...(parsedSkip !== undefined ? { skip: parsedSkip } : {}),
+        ...(parsedLimit !== undefined ? { take: parsedLimit } : {}),
+      }),
+      this.prisma.product.count({ where }),
+    ]);
+
+    return {
+      items: products.map((p) =>
+        this.toPosProductResponse(p, currency, featuredIds),
       ),
       total,
       currency,
@@ -246,6 +304,20 @@ export class ProductsService {
       featuredIds: new Set(
         parseFeaturedProductIds(merchant?.featuredProductIds),
       ),
+    };
+  }
+
+  private toPosProductResponse(
+    p: any,
+    currency: string,
+    featuredIds: Set<string>,
+  ): PosProductResponseDto {
+    const base = this.toProductResponse(p, currency, featuredIds);
+    const isAvailable = p.isActive;
+    return {
+      ...base,
+      is_available: isAvailable,
+      availability_tag: isAvailable ? null : POS_UNAVAILABLE_TAG,
     };
   }
 

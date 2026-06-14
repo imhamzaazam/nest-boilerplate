@@ -7,6 +7,7 @@ import {
   DashboardMetricsResponseDto,
   AnalyticsQueryDto,
   AnalyticsResponseDto,
+  StoreBreakdownItemDto,
 } from './dto/report.dto';
 
 @Injectable()
@@ -114,6 +115,78 @@ export class ReportsService {
     };
   }
 
+  async getMenuMetrics(merchantId: string): Promise<DashboardMetricsResponseDto> {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id: merchantId },
+      select: { currency: true },
+    });
+    const currency = merchant?.currency || 'PKR';
+
+    const [total, active, soldOut, avgPriceResult] = await Promise.all([
+      this.prisma.product.count({ where: { merchantId } }),
+      this.prisma.product.count({ where: { merchantId, isActive: true } }),
+      this.prisma.product.count({ where: { merchantId, isActive: false } }),
+      this.prisma.product.aggregate({
+        where: { merchantId },
+        _avg: { basePrice: true },
+      }),
+    ]);
+
+    const avgPrice = avgPriceResult._avg.basePrice?.toNumber() ?? 0;
+
+    return {
+      metrics: [
+        {
+          label: 'Total Items',
+          value: total.toString(),
+        },
+        {
+          label: 'Active',
+          value: active.toString(),
+          change: 'currently sellable',
+          trend: 'up',
+        },
+        {
+          label: 'Sold Out',
+          value: soldOut.toString(),
+          change: soldOut > 0 ? 'requires restock' : 'all items available',
+          trend: soldOut > 0 ? 'down' : 'neutral',
+        },
+        {
+          label: 'Avg. Price',
+          value: total > 0 ? this.formatCurrency(avgPrice, currency) : this.formatCurrency(0, currency),
+        },
+      ],
+      currency,
+    };
+  }
+
+  async getStoreBreakdown(
+    merchantId: string,
+    query: AnalyticsQueryDto,
+  ): Promise<StoreBreakdownItemDto[]> {
+    const days = query.days || 30;
+    const now = new Date();
+    const startDate = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+
+    const [orders, branches] = await Promise.all([
+      this.prisma.order.findMany({
+        where: {
+          merchantId,
+          createdAt: { gte: startDate },
+          status: { notIn: [OrderStatus.cancelled, OrderStatus.refunded] },
+        },
+        include: { items: true },
+      }),
+      this.prisma.branch.findMany({
+        where: { merchantId },
+        select: { id: true, name: true, city: true, status: true },
+      }),
+    ]);
+
+    return this.buildStoreBreakdown(branches, orders);
+  }
+
   async getAnalytics(merchantId: string, query: AnalyticsQueryDto): Promise<AnalyticsResponseDto> {
     const days = query.days || 30;
     const now = new Date();
@@ -126,7 +199,7 @@ export class ReportsService {
     });
     const currency = merchant?.currency || 'PKR';
 
-    const [currentOrders, previousOrders] = await Promise.all([
+    const [currentOrders, previousOrders, branches] = await Promise.all([
       this.prisma.order.findMany({
         where: {
           merchantId,
@@ -141,6 +214,10 @@ export class ReportsService {
           createdAt: { gte: previousStartDate, lt: startDate },
           status: { notIn: [OrderStatus.cancelled, OrderStatus.refunded] },
         },
+      }),
+      this.prisma.branch.findMany({
+        where: { merchantId },
+        select: { id: true, name: true, city: true, status: true },
       }),
     ]);
 
@@ -209,6 +286,8 @@ export class ReportsService {
       });
     }
 
+    const storeBreakdown = this.buildStoreBreakdown(branches, currentOrders);
+
     return {
       metrics: [
         {
@@ -232,8 +311,81 @@ export class ReportsService {
       ],
       top_selling: topSelling,
       revenue_trend: revenueTrend,
+      store_breakdown: storeBreakdown,
       currency,
     };
+  }
+
+  private buildStoreBreakdown(
+    branches: { id: string; name: string; city: string; status: string }[],
+    orders: {
+      branchId: string;
+      totalAmount: { toNumber: () => number };
+      items: { discountAmount: { toNumber: () => number } }[];
+    }[],
+  ): StoreBreakdownItemDto[] {
+    const branchStats = new Map<
+      string,
+      { orders: number; revenue: number; discountedOrders: number }
+    >();
+
+    for (const order of orders) {
+      const stats = branchStats.get(order.branchId) ?? {
+        orders: 0,
+        revenue: 0,
+        discountedOrders: 0,
+      };
+      stats.orders += 1;
+      stats.revenue += order.totalAmount.toNumber();
+      if (order.items.some((item) => item.discountAmount.toNumber() > 0)) {
+        stats.discountedOrders += 1;
+      }
+      branchStats.set(order.branchId, stats);
+    }
+
+    const maxRevenue = Math.max(
+      ...Array.from(branchStats.values()).map((stats) => stats.revenue),
+      0,
+    );
+
+    return branches
+      .map((branch) => {
+        const stats = branchStats.get(branch.id) ?? {
+          orders: 0,
+          revenue: 0,
+          discountedOrders: 0,
+        };
+
+        return {
+          id: branch.id,
+          name: branch.name,
+          location: `${branch.name} · ${branch.city}`,
+          city: branch.city,
+          orders_count: stats.orders,
+          revenue: stats.revenue,
+          discounted_orders: stats.discountedOrders,
+          branch_status: branch.status,
+          performance_status: this.deriveBranchPerformanceStatus(
+            stats.orders,
+            stats.revenue,
+            maxRevenue,
+          ),
+        };
+      })
+      .sort((a, b) => b.revenue - a.revenue);
+  }
+
+  private deriveBranchPerformanceStatus(
+    ordersCount: number,
+    revenue: number,
+    maxRevenue: number,
+  ): string {
+    if (ordersCount === 0) return 'Inactive';
+    if (maxRevenue <= 0) return 'Steady';
+    const ratio = revenue / maxRevenue;
+    if (ratio >= 0.75) return 'Optimal';
+    if (ratio >= 0.4) return 'Steady';
+    return 'Low';
   }
 
   private formatCurrency(amount: number, currency: string): string {

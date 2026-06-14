@@ -42,6 +42,18 @@ export class RevenueDataPointDto {
   @ApiProperty() orders: number;
 }
 
+export class StoreBreakdownItemDto {
+  @ApiProperty() id: string;
+  @ApiProperty() name: string;
+  @ApiProperty() location: string;
+  @ApiProperty() city: string;
+  @ApiProperty() orders_count: number;
+  @ApiProperty() revenue: number;
+  @ApiProperty() discounted_orders: number;
+  @ApiProperty() branch_status: string;
+  @ApiProperty() performance_status: string;
+}
+
 export class AnalyticsQueryDto {
   @ApiPropertyOptional() @Type(() => Number) @IsInt() @IsOptional() days?: number;
 }
@@ -50,5 +62,6 @@ export class AnalyticsResponseDto {
   @ApiProperty({ type: [DashboardMetricDto] }) metrics: DashboardMetricDto[];
   @ApiProperty({ type: [TopSellingItemDto] }) top_selling: TopSellingItemDto[];
   @ApiProperty({ type: [RevenueDataPointDto] }) revenue_trend: RevenueDataPointDto[];
+  @ApiProperty({ type: [StoreBreakdownItemDto] }) store_breakdown: StoreBreakdownItemDto[];
   @ApiProperty() currency: string;
 }

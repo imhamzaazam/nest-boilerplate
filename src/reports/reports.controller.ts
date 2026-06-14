@@ -7,6 +7,7 @@ import {
   DashboardMetricsResponseDto,
   AnalyticsQueryDto,
   AnalyticsResponseDto,
+  StoreBreakdownItemDto,
 } from './dto/report.dto';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
 import { AuthenticatedUser } from '@/auth/auth.service';
@@ -41,5 +42,22 @@ export class ReportsController {
     @Query() query: AnalyticsQueryDto,
   ): Promise<AnalyticsResponseDto> {
     return this.service.getAnalytics(user.merchantId, query);
+  }
+
+  @Get('store-breakdown')
+  @ApiOperation({ summary: 'Get store performance breakdown by branch' })
+  getStoreBreakdown(
+    @CurrentUser() user: AuthenticatedUser,
+    @Query() query: AnalyticsQueryDto,
+  ): Promise<StoreBreakdownItemDto[]> {
+    return this.service.getStoreBreakdown(user.merchantId, query);
+  }
+
+  @Get('menu')
+  @ApiOperation({ summary: 'Get menu metrics' })
+  getMenuMetrics(
+    @CurrentUser() user: AuthenticatedUser,
+  ): Promise<DashboardMetricsResponseDto> {
+    return this.service.getMenuMetrics(user.merchantId);
   }
 }

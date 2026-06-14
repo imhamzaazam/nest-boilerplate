@@ -61,6 +61,30 @@ export class ProductResponseDto {
   @ApiProperty() is_featured: boolean;
 }
 
+export class PosProductResponseDto extends ProductResponseDto {
+  @ApiProperty({
+    description: 'Whether the product can be added to a POS cart',
+  })
+  is_available: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Display tag when the product is unavailable (e.g. "Unavailable")',
+    nullable: true,
+  })
+  availability_tag: string | null;
+}
+
+export class PosProductsListResponseDto {
+  @ApiProperty({ type: [PosProductResponseDto] })
+  items: PosProductResponseDto[];
+
+  @ApiProperty()
+  total: number;
+
+  @ApiProperty()
+  currency: string;
+}
+
 export class AddonResponseDto {
   @ApiProperty() id: string;
   @ApiProperty() product_id: string;

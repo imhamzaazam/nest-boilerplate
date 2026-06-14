@@ -2,7 +2,7 @@ import { Controller, Get, Post, Delete, Patch, Body, Param, Headers, ParseUUIDPi
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiHeader } from '@nestjs/swagger';
 import { RoleType } from '@prisma/client';
 import { ProductsService } from './products.service';
-import { CreateProductDto, UpdateProductDto, ProductResponseDto, CreateAddonDto, UpdateAddonDto, AddonResponseDto } from './dto/product.dto';
+import { CreateProductDto, UpdateProductDto, ProductResponseDto, PosProductsListResponseDto, CreateAddonDto, UpdateAddonDto, AddonResponseDto } from './dto/product.dto';
 import { Public } from '@/auth/decorators/public.decorator';
 import { Roles } from '@/auth/decorators/roles.decorator';
 import { CurrentUser } from '@/auth/decorators/current-user.decorator';
@@ -12,6 +12,33 @@ import { AuthenticatedUser } from '@/auth/auth.service';
 @Controller('merchant/products')
 export class MerchantProductsController {
   constructor(private readonly service: ProductsService) {}
+
+  @Get('pos')
+  @Public()
+  @ApiHeader({ name: 'x-merchant-id', required: false })
+  @ApiOperation({
+    summary: 'List products for POS (includes unavailable items with tags)',
+  })
+  findAllForPos(
+    @CurrentUser() user: AuthenticatedUser | undefined,
+    @Headers('x-merchant-id') headerMerchantId?: string,
+    @Query('category') category?: string,
+    @Query('minPrice') minPrice?: number,
+    @Query('maxPrice') maxPrice?: number,
+    @Query('limit') limit?: number,
+    @Query('skip') skip?: number,
+  ): Promise<PosProductsListResponseDto> {
+    const merchantId = user?.merchantId || headerMerchantId;
+    if (!merchantId) throw new Error('Merchant ID required');
+    return this.service.findAllForPos(
+      merchantId,
+      category,
+      minPrice,
+      maxPrice,
+      limit,
+      skip,
+    );
+  }
 
   @Get()
   @Public()
@@ -35,7 +62,7 @@ export class MerchantProductsController {
       maxPrice,
       limit,
       skip,
-      Boolean(user),
+      true,
     );
   }
 

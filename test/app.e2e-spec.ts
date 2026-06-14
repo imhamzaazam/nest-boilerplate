@@ -17,6 +17,7 @@ describe('Go Delivery API (e2e)', () => {
   let categoryId: string;
   let productId: string;
   let cartId: string;
+  let discountId: string;
 
   const testEmail = `test-${Date.now()}@example.com`;
   const testPassword = 'TestPass123!';
@@ -410,6 +411,9 @@ describe('Go Delivery API (e2e)', () => {
 
       expect(res.body).toHaveProperty('id');
       expect(res.body.value).toBe(10);
+      expect(res.body.scope).toBe('product');
+      expect(res.body.status).toBe('active');
+      discountId = res.body.id;
     });
 
     it('GET /merchant/discounts - should list discounts', async () => {
@@ -419,6 +423,42 @@ describe('Go Delivery API (e2e)', () => {
         .expect(200);
 
       expect(Array.isArray(res.body)).toBe(true);
+      expect(res.body.length).toBeGreaterThan(0);
+      expect(res.body[0]).toHaveProperty('scope');
+      expect(res.body[0]).toHaveProperty('status');
+    });
+
+    it('GET /merchant/discounts/:id - should get discount by id', async () => {
+      const res = await request(app.getHttpServer())
+        .get(`/api/v1/merchant/discounts/${discountId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      expect(res.body.id).toBe(discountId);
+      expect(res.body.description).toBe('10% off');
+    });
+
+    it('PATCH /merchant/discounts/:id - should update a discount', async () => {
+      const res = await request(app.getHttpServer())
+        .patch(`/api/v1/merchant/discounts/${discountId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .send({ description: '15% off updated', value: 15 })
+        .expect(200);
+
+      expect(res.body.description).toBe('15% off updated');
+      expect(res.body.value).toBe(15);
+    });
+
+    it('DELETE /merchant/discounts/:id - should delete a discount', async () => {
+      await request(app.getHttpServer())
+        .delete(`/api/v1/merchant/discounts/${discountId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(200);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/merchant/discounts/${discountId}`)
+        .set('Authorization', `Bearer ${accessToken}`)
+        .expect(404);
     });
   });
 
